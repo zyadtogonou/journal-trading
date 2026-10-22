@@ -1175,4 +1175,1320 @@ footer {
 
   <div class="cards">
     <div class="card"><div class="card-label">Résultat de la semaine</div><div class="card-value" id="weekResult">$0.00</div><div class="card-note" id="weekCount">0 position</div></div>
-    <div class="card"><div class="card-label">Résultat du mois</
+    <div class="card"><div class="card-label">Résultat du mois</div><div class="card-value" id="monthResult">$0.00</div><div class="card-note" id="monthCount">0 position</div></div>
+    <div class="card"><div class="card-label">Nombre total de trades</div><div class="card-value" id="reviewCount">0</div><div class="card-note">Historique complet</div></div>
+  </div>
+
+  <form id="reviewForm" class="panel">
+    <label>Ce que j'ai bien fait<textarea id="reviewGood" rows="3" placeholder="Mes bonnes décisions, ma discipline..."></textarea></label><br>
+    <label>Les erreurs à corriger<textarea id="reviewImprove" rows="3" placeholder="Les erreurs observées et leurs causes possibles..."></textarea></label><br>
+    <label>Objectifs de la prochaine période<textarea id="reviewGoals" rows="3" placeholder="Des objectifs concrets et mesurables..."></textarea></label><br>
+    <button class="btn primary" type="submit">Enregistrer mon bilan</button>
+  </form>
+</section>
+
+<section class="page" id="page-settings">
+  <div class="intro">
+    <div><div class="eyebrow">CONFIGURATION</div><h2>Paramètres et données</h2><p>Configure ton capital et protège tes données.</p></div>
+  </div>
+
+  <article class="panel form-section">
+    <h3>Capital de départ</h3>
+    <p>Le capital estimé correspond au capital initial plus les résultats enregistrés.</p>
+    <form id="capitalForm">
+      <label>Capital initial ($)<input type="number" id="startingCapital" min="0" step="0.01" required placeholder="Ex. : 100"></label><br>
+      <button class="btn primary" type="submit">Enregistrer le capital</button>
+    </form>
+  </article>
+
+  <article class="panel form-section">
+    <h3>Sauvegarde complète</h3>
+    <p>Exporte les positions, les bilans et les captures d'écran. Les captures sont incluses dans le fichier JSON et peuvent rendre celui-ci volumineux.</p>
+    <div class="form-actions" style="justify-content:flex-start">
+      <button class="btn" type="button" id="backupBtn">Télécharger la sauvegarde JSON</button>
+      <label class="btn" style="flex-direction:row;align-items:center">Importer une sauvegarde
+        <input type="file" id="restoreFile" accept=".json,application/json" style="max-width:220px">
+      </label>
+    </div>
+  </article>
+
+  <article class="panel form-section">
+    <h3>Gestion du stockage</h3>
+    <p id="storageInfo" class="muted">Chargement des informations de stockage...</p>
+    <button class="btn" id="clearAll" type="button">Effacer toutes mes données</button>
+  </article>
+
+  <div class="notice">
+    <strong>Confidentialité et sauvegardes :</strong>
+    les données et captures restent dans le navigateur de cet appareil, via IndexedDB.
+    GitHub Pages ne reçoit pas tes trades. Le navigateur peut toutefois effacer les données
+    locales ou manquer d'espace. Exporte régulièrement une sauvegarde et conserve-la dans
+    un endroit sûr. Les données ne se synchronisent pas automatiquement entre appareils.
+  </div>
+</section>
+
+<footer>
+  <span>Journal de trading · Step Index</span>
+  <span>Carolus TOGONOU · USD</span>
+</footer>
+</main>
+</div>
+
+<div class="modal-backdrop" id="detailModal" role="dialog" aria-modal="true" aria-labelledby="detailTitle">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="detailTitle">Détail de la position</h2>
+      <button class="btn" id="closeModal" type="button">Fermer</button>
+    </div>
+    <div id="detailContent"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+const DB_NAME="CarolusTradingJournalDB";
+const DB_VERSION=1;
+const STORE="trades";
+const SETTINGS_KEY="carolus_trading_settings_v2";
+
+const $=id=>document.getElementById(id);
+let db=null;
+let trades=[];
+let startingCapital=0;
+let review={good:"",improve:"",goals:""};
+let currentCaptures=[];
+let pendingFiles=[];
+let charts={};
+
+const fieldIds={
+  date:"tradeDate",
+  entryTime:"entryTime",
+  direction:"direction",
+  timeframe:"timeframe",
+  strategy:"strategy",
+  context:"context",
+  quality:"quality",
+  result:"result",
+  risk:"risk",
+  target:"target",
+  setup:"setup",
+  entryZone:"entryZone",
+  plan:"plan",
+  analysis:"analysis",
+  confirmationNotes:"confirmationNotes",
+  emotion:"emotion",
+  mistake:"mistake",
+  lesson:"lesson",
+  candleOther:"candleOther",
+  patternOther:"patternOther",
+  smcOther:"smcOther"
+};
+
+const money=n=>new Intl.NumberFormat("en-US",{
+  style:"currency",currency:"USD",minimumFractionDigits:2,maximumFractionDigits:2
+}).format(Number(n)||0);
+
+const num=n=>Number.isFinite(Number(n))?Number(n):0;
+
+const today=()=>{
+  const d=new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+};
+
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({
+  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+}[c]));
+
+const outcome=t=>num(t.result)>0?"win":num(t.result)<0?"loss":"flat";
+
+const rrTarget=t=>num(t.risk)>0&&num(t.target)>0?num(t.target)/num(t.risk):null;
+const rrReal=t=>num(t.risk)>0?num(t.result)/num(t.risk):null;
+
+function notify(msg){
+  $("toast").textContent=msg;
+  $("toast").classList.add("show");
+  clearTimeout(notify.timer);
+  notify.timer=setTimeout(()=>$("toast").classList.remove("show"),2800);
+}
+
+function openDB(){
+  return new Promise((resolve,reject)=>{
+    if(!("indexedDB" in window)){
+      reject(new Error("IndexedDB indisponible"));
+      return;
+    }
+    const req=indexedDB.open(DB_NAME,DB_VERSION);
+    req.onupgradeneeded=()=>{
+      const d=req.result;
+      if(!d.objectStoreNames.contains(STORE)){
+        const s=d.createObjectStore(STORE,{keyPath:"id"});
+        s.createIndex("date","date",{unique:false});
+      }
+    };
+    req.onsuccess=()=>{db=req.result;resolve(db);};
+    req.onerror=()=>reject(req.error);
+  });
+}
+
+function dbGetAll(){
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(STORE,"readonly");
+    const req=tx.objectStore(STORE).getAll();
+    req.onsuccess=()=>resolve(req.result||[]);
+    req.onerror=()=>reject(req.error);
+  });
+}
+
+function dbPut(t){
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(STORE,"readwrite");
+    tx.objectStore(STORE).put(t);
+    tx.oncomplete=()=>resolve();
+    tx.onerror=()=>reject(tx.error);
+    tx.onabort=()=>reject(tx.error);
+  });
+}
+
+function dbDelete(id){
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(STORE,"readwrite");
+    tx.objectStore(STORE).delete(id);
+    tx.oncomplete=()=>resolve();
+    tx.onerror=()=>reject(tx.error);
+  });
+}
+
+function dbClear(){
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(STORE,"readwrite");
+    tx.objectStore(STORE).clear();
+    tx.oncomplete=()=>resolve();
+    tx.onerror=()=>reject(tx.error);
+  });
+}
+
+function readSettings(){
+  try{
+    const s=JSON.parse(localStorage.getItem(SETTINGS_KEY)||"{}");
+    startingCapital=num(s.startingCapital);
+    review={...review,...(s.review||{})};
+    applyTheme(s.theme||"dark");
+  }catch(e){
+    applyTheme("dark");
+  }
+}
+
+function saveSettings(){
+  localStorage.setItem(SETTINGS_KEY,JSON.stringify({
+    startingCapital,
+    review,
+    theme:document.documentElement.dataset.theme||"dark"
+  }));
+}
+
+function applyTheme(theme){
+  document.documentElement.dataset.theme=theme;
+  const b=$("themeToggle");
+  if(b)b.textContent=theme==="dark"?"☼ Mode clair":"☾ Mode sombre";
+  Object.values(charts).forEach(c=>{
+    if(!c)return;
+    const color=getComputedStyle(document.documentElement).getPropertyValue("--muted").trim();
+    if(c.options.scales){
+      Object.values(c.options.scales).forEach(s=>{
+        if(s.ticks)s.ticks.color=color;
+        if(s.grid)s.grid.color=getComputedStyle(document.documentElement).getPropertyValue("--border").trim();
+      });
+    }
+    if(c.options.plugins?.legend?.labels)c.options.plugins.legend.labels.color=color;
+    c.update();
+  });
+}
+
+function showPage(name){
+  document.querySelectorAll(".page").forEach(p=>p.classList.toggle("active",p.id==="page-"+name));
+  document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===name));
+
+  const titles={
+    dashboard:"Tableau de bord",
+    new:"Nouvelle position",
+    history:"Historique des trades",
+    analytics:"Analyses statistiques",
+    review:"Bilan personnel",
+    settings:"Paramètres et données"
+  };
+
+  $("pageTitle").textContent=titles[name]||"Journal de trading";
+
+  if(name==="dashboard")renderDashboard();
+  if(name==="history")renderHistory();
+  if(name==="analytics")renderAnalytics();
+  if(name==="review")renderReview();
+  if(name==="settings"){
+    $("startingCapital").value=startingCapital||"";
+    updateStorageInfo();
+  }
+
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+document.querySelectorAll("nav button").forEach(b=>
+  b.addEventListener("click",()=>showPage(b.dataset.page))
+);
+
+document.querySelectorAll("[data-goto]").forEach(b=>
+  b.addEventListener("click",()=>showPage(b.dataset.goto))
+);
+
+$("themeToggle").addEventListener("click",()=>{
+  applyTheme(document.documentElement.dataset.theme==="dark"?"light":"dark");
+  saveSettings();
+});
+
+$("year").textContent=new Date().getFullYear();
+
+function sortedTrades(){
+  return [...trades].sort((a,b)=>
+    (a.date||"").localeCompare(b.date||"")||
+    (a.entryTime||"").localeCompare(b.entryTime||"")||
+    (a.createdAt||0)-(b.createdAt||0)
+  );
+}
+
+function periodTrades(){
+  const p=$("period").value;
+  const t=today();
+
+  if(p==="all")return [...trades];
+  if(p==="month")return trades.filter(x=>x.date&&x.date.slice(0,7)===t.slice(0,7));
+  if(p==="year")return trades.filter(x=>x.date&&x.date.slice(0,4)===t.slice(0,4));
+
+  const d=new Date();
+  d.setDate(d.getDate()-Number(p)+1);
+  const s=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+
+  return trades.filter(x=>x.date>=s&&x.date<=t);
+}
+
+function calculate(ts){
+  const wins=ts.filter(t=>num(t.result)>0);
+  const losses=ts.filter(t=>num(t.result)<0);
+  const flats=ts.filter(t=>num(t.result)===0);
+  const grossWins=wins.reduce((a,t)=>a+num(t.result),0);
+  const grossLosses=Math.abs(losses.reduce((a,t)=>a+num(t.result),0));
+  const net=grossWins-grossLosses;
+
+  let cum=0,peak=0,dd=0,ws=0,ls=0,mw=0,ml=0;
+  const ids=new Set(ts.map(t=>t.id));
+
+  sortedTrades().filter(t=>ids.has(t.id)).forEach(t=>{
+    cum+=num(t.result);
+    peak=Math.max(peak,cum);
+    dd=Math.max(dd,peak-cum);
+
+    if(num(t.result)>0){ws++;ls=0;}
+    else if(num(t.result)<0){ls++;ws=0;}
+    else{ws=0;ls=0;}
+
+    mw=Math.max(mw,ws);
+    ml=Math.max(ml,ls);
+  });
+
+  const plan=ts.filter(t=>["Oui","Partiellement","Non"].includes(t.plan));
+  const realRs=ts.map(rrReal).filter(v=>v!==null);
+  const pf=grossLosses===0?(grossWins>0?Infinity:null):grossWins/grossLosses;
+
+  return {
+    count:ts.length,
+    wins:wins.length,
+    losses:losses.length,
+    flats:flats.length,
+    grossWins,
+    grossLosses,
+    net,
+    winRate:ts.length?wins.length/ts.length*100:0,
+    expectancy:ts.length?net/ts.length:0,
+    pf,
+    dd,
+    avgWin:wins.length?grossWins/wins.length:0,
+    avgLoss:losses.length?grossLosses/losses.length:0,
+    best:wins.length?Math.max(...wins.map(t=>num(t.result))):null,
+    worst:losses.length?Math.min(...losses.map(t=>num(t.result))):null,
+    avgR:realRs.length?realRs.reduce((a,v)=>a+v,0)/realRs.length:null,
+    planRate:plan.length?plan.filter(t=>t.plan==="Oui").length/plan.length*100:null,
+    maxWin:mw,
+    maxLoss:ml
+  };
+}
+
+function setMoney(id,n){
+  const el=$(id);
+  el.textContent=money(n);
+  el.classList.toggle("green",n>0);
+  el.classList.toggle("red",n<0);
+}
+
+function chartEmpty(canvasId,emptyId,has){
+  $(canvasId).style.display=has?"block":"none";
+  $(emptyId).style.display=has?"none":"block";
+}
+
+function destroyChart(k){
+  if(charts[k]){
+    charts[k].destroy();
+    delete charts[k];
+  }
+}
+
+function chartColors(){
+  const cs=getComputedStyle(document.documentElement);
+  return {
+    text:cs.getPropertyValue("--muted").trim(),
+    grid:cs.getPropertyValue("--border").trim(),
+    green:cs.getPropertyValue("--green").trim(),
+    red:cs.getPropertyValue("--red").trim(),
+    accent:cs.getPropertyValue("--accent").trim(),
+    panel:cs.getPropertyValue("--panel").trim()
+  };
+}
+
+function axisOptions(){
+  const c=chartColors();
+  return {
+    responsive:true,
+    maintainAspectRatio:false,
+    plugins:{
+      legend:{labels:{color:c.text,font:{family:"Inter",size:10}}}
+    },
+    scales:{
+      x:{
+        ticks:{color:c.text,font:{family:"Inter",size:10}},
+        grid:{display:false}
+      },
+      y:{
+        ticks:{color:c.text,font:{family:"JetBrains Mono",size:9}},
+        grid:{color:c.grid}
+      }
+    }
+  };
+}
+
+function makeLine(k,id,labels,data){
+  destroyChart(k);
+  const c=chartColors();
+  charts[k]=new Chart($(id),{
+    type:"line",
+    data:{
+      labels,
+      datasets:[{
+        label:"Résultat cumulé",
+        data,
+        borderColor:c.accent,
+        backgroundColor:c.accent+"22",
+        fill:true,
+        tension:.25,
+        pointRadius:data.length>40?0:3
+      }]
+    },
+    options:axisOptions()
+  });
+}
+
+function makeBar(k,id,labels,data){
+  destroyChart(k);
+  const c=chartColors();
+  charts[k]=new Chart($(id),{
+    type:"bar",
+    data:{
+      labels,
+      datasets:[{
+        data,
+        backgroundColor:data.map(v=>v>=0?c.green:c.red),
+        borderRadius:4
+      }]
+    },
+    options:{
+      ...axisOptions(),
+      plugins:{legend:{display:false}}
+    }
+  });
+}
+
+function makeDoughnut(k,id,data){
+  destroyChart(k);
+  const c=chartColors();
+  charts[k]=new Chart($(id),{
+    type:"doughnut",
+    data:{
+      labels:["Gagnantes","Perdantes","Neutres"],
+      datasets:[{
+        data,
+        backgroundColor:[c.green,c.red,"#8793a6"],
+        borderColor:c.panel,
+        borderWidth:4
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      plugins:{
+        legend:{
+          position:"bottom",
+          labels:{color:c.text,font:{family:"Inter",size:10}}
+        }
+      }
+    }
+  });
+}
+
+function renderInsights(ts,target){
+  const s=calculate(ts);
+  const items=[];
+
+  if(!s.count){
+    $(target).innerHTML='<div class="empty">Aucune donnée à analyser pour le moment.</div>';
+    return;
+  }
+
+  if(s.count<10){
+    items.push([
+      "Échantillon limité",
+      "Tu as enregistré "+s.count+" position(s). Les résultats sont descriptifs, mais insuffisants pour conclure à une rentabilité durable.",
+      "warning"
+    ]);
+  }else{
+    items.push([
+      "Résultat net",
+      "Le résultat net sur la période est de "+money(s.net)+".",
+      s.net>0?"good":s.net<0?"warning":""
+    ]);
+  }
+
+  if(s.pf===null){
+    items.push(["Profit Factor non calculable","Aucun gain ni aucune perte enregistrée sur cet échantillon.",""]);
+  }else if(s.pf===Infinity){
+    items.push(["Aucune perte enregistrée","Le Profit Factor est indéfini au sens habituel tant qu'aucune perte n'est enregistrée.","warning"]);
+  }else{
+    items.push([
+      "Profit Factor : "+s.pf.toFixed(2),
+      s.pf>1?"Les gains bruts dépassent les pertes brutes sur cet échantillon.":"Les pertes brutes sont supérieures ou égales aux gains bruts sur cet échantillon.",
+      s.pf>1?"good":"warning"
+    ]);
+  }
+
+  if(s.wins&&s.losses){
+    items.push([
+      "Équilibre gains / pertes",
+      "Gain moyen : "+money(s.avgWin)+". Perte moyenne : "+money(s.avgLoss)+".",
+      s.avgWin>=s.avgLoss?"good":"warning"
+    ]);
+  }
+
+  if(s.avgR!==null){
+    items.push([
+      "R moyen réalisé",
+      "La moyenne du résultat divisé par le risque initial est de "+s.avgR.toFixed(2)+"R sur les trades où le risque est renseigné.",
+      s.avgR>0?"good":"warning"
+    ]);
+  }
+
+  const emotional=ts.filter(t=>["Stressé","Frustré","Impulsif","Fatigué"].includes(t.emotion));
+
+  if(emotional.length>=3){
+    const r=emotional.reduce((a,t)=>a+num(t.result),0);
+    items.push([
+      "État émotionnel",
+      emotional.length+" trades ont été enregistrés avec une émotion potentiellement défavorable. Résultat cumulé : "+money(r)+". Cela ne prouve pas de causalité.",
+      "warning"
+    ]);
+  }
+
+  $(target).innerHTML=items.map(([a,b,c])=>
+    '<div class="insight '+c+'"><strong>'+esc(a)+'</strong>'+esc(b)+'</div>'
+  ).join("");
+}
+
+function renderDashboard(){
+  const ts=periodTrades();
+  const s=calculate(ts);
+
+  setMoney("capitalValue",startingCapital+trades.reduce((a,t)=>a+num(t.result),0));
+  setMoney("netValue",s.net);
+
+  $("winRate").textContent=s.winRate.toFixed(1)+"%";
+  $("winCount").textContent=s.wins+" gagnante(s) sur "+s.count+" position(s)";
+  $("profitFactor").textContent=s.pf===Infinity?"∞":s.pf===null?"-":s.pf.toFixed(2);
+
+  setMoney("expectancy",s.expectancy);
+  setMoney("drawdown",-s.dd);
+
+  $("bestTrade").textContent=s.best===null?"-":money(s.best);
+  $("worstTrade").textContent=s.worst===null?"-":money(s.worst);
+  $("averageWin").textContent=s.wins?money(s.avgWin):"-";
+  $("averageLoss").textContent=s.losses?"-"+money(s.avgLoss):"-";
+  $("tradeCount").textContent=s.count;
+
+  const sorted=sortedTrades().filter(t=>ts.some(x=>x.id===t.id));
+  let cum=0;
+  const curve=sorted.map(t=>(cum+=num(t.result)));
+
+  chartEmpty("equityChart","equityEmpty",sorted.length>0);
+  if(sorted.length)makeLine("equity","equityChart",sorted.map(t=>t.date||""),curve);
+  else destroyChart("equity");
+
+  chartEmpty("outcomeChart","outcomeEmpty",s.count>0);
+  if(s.count)makeDoughnut("outcome","outcomeChart",[s.wins,s.losses,s.flats]);
+  else destroyChart("outcome");
+
+  const days=["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
+  const vals=Array(7).fill(0);
+
+  ts.forEach(t=>{
+    if(t.date)vals[new Date(t.date+"T12:00:00").getDay()]+=num(t.result);
+  });
+
+  chartEmpty("weekdayChart","weekdayEmpty",s.count>0);
+  if(s.count)makeBar("weekday","weekdayChart",days,vals);
+  else destroyChart("weekday");
+
+  const months={};
+  ts.forEach(t=>{
+    if(t.date){
+      const k=t.date.slice(0,7);
+      months[k]=(months[k]||0)+num(t.result);
+    }
+  });
+
+  const keys=Object.keys(months).sort();
+
+  chartEmpty("monthlyChart","monthlyEmpty",keys.length>0);
+  if(keys.length)makeBar("monthly","monthlyChart",keys,keys.map(k=>months[k]));
+  else destroyChart("monthly");
+
+  renderInsights(ts,"insights");
+}
+
+$("period").addEventListener("change",renderDashboard);
+
+function selectedValues(name){
+  return [...document.querySelectorAll('input[name="'+name+'"]:checked')].map(x=>x.value);
+}
+
+function setSelected(name,values){
+  document.querySelectorAll('input[name="'+name+'"]').forEach(x=>{
+    x.checked=(values||[]).includes(x.value);
+  });
+}
+
+function handleExclusiveGroup(name,exclusiveValue){
+  document.querySelectorAll('input[name="'+name+'"]').forEach(el=>{
+    el.addEventListener("change",()=>{
+      if(el.checked&&el.value===exclusiveValue){
+        document.querySelectorAll('input[name="'+name+'"]').forEach(other=>{
+          if(other!==el)other.checked=false;
+        });
+      }else if(el.checked){
+        document.querySelectorAll('input[name="'+name+'"][value="'+exclusiveValue+'"]').forEach(other=>{
+          other.checked=false;
+        });
+      }
+    });
+  });
+}
+
+handleExclusiveGroup("pattern","Aucune");
+
+$("candleChoices").addEventListener("change",()=>{
+  $("candleOtherWrap").hidden=!selectedValues("candle").includes("Autre");
+});
+
+$("patternChoices").addEventListener("change",()=>{
+  $("patternOtherWrap").hidden=!selectedValues("pattern").includes("Autre");
+});
+
+$("smcChoices").addEventListener("change",()=>{
+  $("smcOtherWrap").hidden=!selectedValues("smc").includes("Autre");
+});
+
+function updateRatios(){
+  const r=num($("risk").value);
+  const g=num($("target").value);
+  const v=num($("result").value);
+
+  $("rrPreview").textContent=r>0&&g>0
+    ?"1:"+Number(g/r).toFixed(2).replace(/\.?0+$/,"")
+    :"Non calculable";
+
+  $("realizedR").textContent=r>0&&$("result").value!==""
+    ?(v/r).toFixed(2)+"R"
+    :"Non calculable";
+
+  $("realizedR").className=v>0?"green":v<0?"red":"";
+}
+
+["risk","target","result"].forEach(id=>
+  $(id).addEventListener("input",updateRatios)
+);
+
+function selectedConfirmations(){
+  const candles=selectedValues("candle").filter(v=>v!=="Autre");
+  const patterns=selectedValues("pattern").filter(v=>v!=="Autre");
+  const smc=selectedValues("smc").filter(v=>v!=="Autre");
+
+  if(selectedValues("candle").includes("Autre")&&$("candleOther").value.trim())
+    candles.push("Autre : "+$("candleOther").value.trim());
+
+  if(selectedValues("pattern").includes("Autre")&&$("patternOther").value.trim())
+    patterns.push("Autre : "+$("patternOther").value.trim());
+
+  if(selectedValues("smc").includes("Autre")&&$("smcOther").value.trim())
+    smc.push("Autre : "+$("smcOther").value.trim());
+
+  return {candles,patterns,smc,all:[...candles,...patterns,...smc]};
+}
+
+function getFormData(){
+  const t={};
+  Object.entries(fieldIds).forEach(([k,id])=>t[k]=$(id).value.trim());
+  t.result=num(t.result);
+  t.risk=num(t.risk);
+  t.target=num(t.target);
+  t.market="Step Index";
+  t.confirmations=selectedConfirmations();
+  t.rrTarget=rrTarget(t);
+  t.rrReal=rrReal(t);
+  return t;
+}
+
+function resetForm(){
+  $("tradeForm").reset();
+  $("tradeId").value="";
+  $("formTitle").textContent="Enregistrer une position";
+  $("saveButton").textContent="Enregistrer la position";
+  $("cancelEdit").hidden=true;
+  $("tradeDate").value=today();
+
+  setSelected("candle",[]);
+  setSelected("pattern",[]);
+  setSelected("smc",[]);
+
+  $("candleOtherWrap").hidden=true;
+  $("patternOtherWrap").hidden=true;
+  $("smcOtherWrap").hidden=true;
+
+  currentCaptures=[];
+  pendingFiles=[];
+  renderCapturePreview();
+  updateRatios();
+}
+
+$("resetForm").addEventListener("click",resetForm);
+
+$("cancelEdit").addEventListener("click",()=>{
+  resetForm();
+  showPage("history");
+});
+
+$("captureInput").addEventListener("change",e=>{
+  const files=[...e.target.files];
+
+  for(const f of files){
+    if(!f.type.startsWith("image/"))continue;
+
+    if(f.size>12*1024*1024){
+      notify("Une image dépasse 12 Mo et a été ignorée.");
+      continue;
+    }
+
+    pendingFiles.push(f);
+  }
+
+  e.target.value="";
+  renderCapturePreview();
+});
+
+function fileToDataURL(file){
+  return new Promise((resolve,reject)=>{
+    const r=new FileReader();
+    r.onload=()=>resolve({
+      name:file.name,
+      dataUrl:r.result,
+      type:file.type,
+      size:file.size
+    });
+    r.onerror=()=>reject(r.error);
+    r.readAsDataURL(file);
+  });
+}
+
+function renderCapturePreview(){
+  const root=$("capturePreview");
+  root.innerHTML="";
+
+  const all=[
+    ...currentCaptures.map((c,i)=>({
+      name:c.name||"Capture "+(i+1),
+      dataUrl:c.dataUrl,
+      kind:"saved",
+      index:i
+    })),
+    ...pendingFiles.map((f,i)=>({
+      name:f.name,
+      kind:"pending",
+      index:i,
+      url:URL.createObjectURL(f)
+    }))
+  ];
+
+  if(!all.length){
+    root.innerHTML='<div class="empty" style="grid-column:1/-1">Aucune capture ajoutée.</div>';
+    return;
+  }
+
+  all.forEach(c=>{
+    const div=document.createElement("div");
+    div.className="capture-card";
+    const src=c.dataUrl||c.url;
+
+    div.innerHTML='<img alt="Aperçu de la capture"><button type="button" aria-label="Retirer la capture">×</button><small></small>';
+    div.querySelector("img").src=src;
+    div.querySelector("small").textContent=c.name;
+
+    div.querySelector("button").addEventListener("click",()=>{
+      if(c.kind==="saved")currentCaptures.splice(c.index,1);
+      else pendingFiles.splice(c.index,1);
+      renderCapturePreview();
+    });
+
+    root.appendChild(div);
+  });
+}
+
+async function collectCaptures(){
+  const added=await Promise.all(pendingFiles.map(fileToDataURL));
+  return [...currentCaptures,...added];
+}
+
+$("tradeForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+
+  const btn=$("saveButton");
+  btn.disabled=true;
+
+  try{
+    const data=getFormData();
+    const id=$("tradeId").value||("trade-"+Date.now()+"-"+Math.random().toString(36).slice(2,8));
+    const old=trades.find(t=>t.id===id);
+    const captures=await collectCaptures();
+
+    const record={
+      ...old,
+      ...data,
+      id,
+      createdAt:old?.createdAt||Date.now(),
+      captures
+    };
+
+    await dbPut(record);
+    await refreshTrades();
+
+    notify(old?"Position mise à jour.":"Position enregistrée.");
+
+    resetForm();
+    renderAll();
+    showPage("history");
+  }catch(err){
+    console.error(err);
+    alert("Impossible d'enregistrer cette position. Vérifie l'espace disponible dans le navigateur et réessaie.");
+  }finally{
+    btn.disabled=false;
+  }
+});
+
+function editTrade(id){
+  const t=trades.find(x=>x.id===id);
+  if(!t)return;
+
+  resetForm();
+
+  Object.entries(fieldIds).forEach(([k,field])=>$(field).value=t[k]??"");
+
+  $("tradeId").value=id;
+  $("formTitle").textContent="Modifier une position";
+  $("saveButton").textContent="Enregistrer les modifications";
+  $("cancelEdit").hidden=false;
+
+  setSelected("candle",t.confirmations?.candles?.filter(x=>!x.startsWith("Autre :"))||[]);
+  setSelected("pattern",t.confirmations?.patterns?.filter(x=>!x.startsWith("Autre :"))||[]);
+  setSelected("smc",t.confirmations?.smc?.filter(x=>!x.startsWith("Autre :"))||[]);
+
+  const all=[
+    ...(t.confirmations?.candles||[]),
+    ...(t.confirmations?.patterns||[]),
+    ...(t.confirmations?.smc||[])
+  ];
+
+  const cOther=all.find(x=>x.startsWith("Autre :"));
+
+  if(cOther){
+    if(t.confirmations?.candles?.includes(cOther)){
+      $("candleOther").value=cOther.slice(8);
+      setSelected("candle",[...selectedValues("candle"),"Autre"]);
+    }else if(t.confirmations?.patterns?.includes(cOther)){
+      $("patternOther").value=cOther.slice(8);
+      setSelected("pattern",[...selectedValues("pattern"),"Autre"]);
+    }else{
+      $("smcOther").value=cOther.slice(8);
+      setSelected("smc",[...selectedValues("smc"),"Autre"]);
+    }
+  }
+
+  $("candleOtherWrap").hidden=!selectedValues("candle").includes("Autre");
+  $("patternOtherWrap").hidden=!selectedValues("pattern").includes("Autre");
+  $("smcOtherWrap").hidden=!selectedValues("smc").includes("Autre");
+
+  currentCaptures=[...(t.captures||[])];
+  pendingFiles=[];
+  renderCapturePreview();
+  updateRatios();
+  showPage("new");
+}
+
+async function deleteTrade(id){
+  const t=trades.find(x=>x.id===id);
+  if(!t||!confirm("Supprimer cette position et ses captures ?"))return;
+
+  try{
+    await dbDelete(id);
+    await refreshTrades();
+    renderAll();
+    notify("Position supprimée.");
+  }catch(e){
+    alert("La suppression a échoué.");
+  }
+}
+
+function confirmationSummary(t){
+  return (t.confirmations?.all||[]).join(", ")||"—";
+}
+
+function showDetails(id){
+  const t=trades.find(x=>x.id===id);
+  if(!t)return;
+
+  const items=[
+    ["Date",t.date],
+    ["Heure d'entrée",t.entryTime||"—"],
+    ["Direction",t.direction],
+    ["Stratégie",t.strategy||"—"],
+    ["Unité de temps",t.timeframe||"—"],
+    ["Résultat",money(t.result)],
+    ["Risque",money(t.risk)],
+    ["Gain visé",money(t.target)],
+    ["R:R visé",rrTarget(t)===null?"—":"1:"+Number(rrTarget(t)).toFixed(2)],
+    ["R réalisé",rrReal(t)===null?"—":rrReal(t).toFixed(2)+"R"],
+    ["Contexte",t.context||"—"],
+    ["Bougies",(t.confirmations?.candles||[]).join(", ")||"—"],
+    ["Figures chartistes",(t.confirmations?.patterns||[]).join(", ")||"—"],
+    ["Confirmations SMC",(t.confirmations?.smc||[]).join(", ")||"—"],
+    ["Zone d'entrée",t.entryZone||"—"],
+    ["Respect du plan",t.plan||"—"],
+    ["État émotionnel",t.emotion||"—"],
+    ["Erreur principale",t.mistake||"—"],
+    ["Explication",t.analysis||"—"],
+    ["Confirmation complémentaire",t.confirmationNotes||"—"],
+    ["Leçon retenue",t.lesson||"—"]
+  ];
+
+  $("detailTitle").textContent="Trade du "+(t.date||"date inconnue")+" · "+t.direction;
+
+  $("detailContent").innerHTML=items.map(([k,v])=>
+    '<div class="detail-block"><strong>'+esc(k)+'</strong><br>'+esc(v??"—")+'</div>'
+  ).join("")+(t.captures?.length
+    ?'<h3>Captures d’écran</h3><div class="detail-captures">'+
+      t.captures.map(c=>'<div><img src="'+c.dataUrl+'" alt="'+esc(c.name||"Capture")+'"><div class="muted">'+esc(c.name||"Capture")+'</div></div>').join("")+
+      '</div>'
+    :'<div class="empty">Aucune capture pour ce trade.</div>');
+
+  $("detailModal").classList.add("open");
+}
+
+$("closeModal").addEventListener("click",()=>$("detailModal").classList.remove("open"));
+
+$("detailModal").addEventListener("click",e=>{
+  if(e.target===$("detailModal"))$("detailModal").classList.remove("open");
+});
+
+document.addEventListener("keydown",e=>{
+  if(e.key==="Escape")$("detailModal").classList.remove("open");
+});
+
+function filteredTrades(){
+  const q=$("search").value.toLowerCase().trim();
+  const from=$("dateFrom").value;
+  const to=$("dateTo").value;
+  const dir=$("directionFilter").value;
+  const out=$("outcomeFilter").value;
+  const strategy=$("strategyFilter").value;
+  const conf=$("confirmationFilter").value;
+
+  return sortedTrades().filter(t=>
+    (!q||[t.analysis,t.lesson,t.strategy,t.confirmationNotes,t.setup,t.emotion,t.direction,confirmationSummary(t)].join(" ").toLowerCase().includes(q))&&
+    (!from||t.date>=from)&&
+    (!to||t.date<=to)&&
+    (!dir||t.direction===dir)&&
+    (!out||outcome(t)===out)&&
+    (!strategy||t.strategy===strategy)&&
+    (!conf||(t.confirmations?.all||[]).some(c=>c===conf||c.startsWith(conf+":")))
+  ).reverse();
+}
+
+function renderHistory(){
+  const ts=filteredTrades();
+  $("historyCount").textContent=ts.length+" position(s)";
+  setMoney("historyNet",ts.reduce((a,t)=>a+num(t.result),0));
+  $("historyEmpty").style.display=ts.length?"none":"block";
+
+  $("tradeTable").innerHTML=ts.map(t=>{
+    const r=num(t.result);
+    const rr=rrTarget(t);
+    const real=rrReal(t);
+    const caps=t.captures?.length||0;
+
+    return `<tr>
+      <td>${esc(t.date||"—")}</td>
+      <td><span class="badge ${t.direction==="Buy"?"buy":"sell"}">${esc(t.direction)}</span></td>
+      <td>${esc(t.strategy||"—")}</td>
+      <td title="${esc(confirmationSummary(t))}">${esc(confirmationSummary(t).length>38?confirmationSummary(t).slice(0,35)+"…":confirmationSummary(t))}</td>
+      <td>${rr===null?"—":"1:"+rr.toFixed(2)}</td>
+      <td class="${real>0?"green":real<0?"red":""}">${real===null?"—":real.toFixed(2)+"R"}</td>
+      <td class="${r>0?"green":r<0?"red":""}">${money(r)}</td>
+      <td>${caps}</td>
+      <td><div class="action-buttons">
+        <button class="small-btn" data-view="${esc(t.id)}">Voir</button>
+        <button class="small-btn" data-edit="${esc(t.id)}">Modifier</button>
+        <button class="small-btn" data-delete="${esc(t.id)}">×</button>
+      </div></td>
+    </tr>`;
+  }).join("");
+
+  $("tradeTable").querySelectorAll("[data-view]").forEach(b=>
+    b.addEventListener("click",()=>showDetails(b.dataset.view))
+  );
+
+  $("tradeTable").querySelectorAll("[data-edit]").forEach(b=>
+    b.addEventListener("click",()=>editTrade(b.dataset.edit))
+  );
+
+  $("tradeTable").querySelectorAll("[data-delete]").forEach(b=>
+    b.addEventListener("click",()=>deleteTrade(b.dataset.delete))
+  );
+}
+
+["search","dateFrom","dateTo","directionFilter","outcomeFilter","strategyFilter","confirmationFilter"].forEach(id=>
+  $(id).addEventListener("input",renderHistory)
+);
+
+$("clearFilters").addEventListener("click",()=>{
+  ["search","dateFrom","dateTo","directionFilter","outcomeFilter","strategyFilter","confirmationFilter"].forEach(id=>$(id).value="");
+  renderHistory();
+});
+
+function allConfirmations(ts){
+  const map={};
+  ts.forEach(t=>(t.confirmations?.all||[]).forEach(c=>{
+    map[c]??=[];
+    map[c].push(t);
+  }));
+  return map;
+}
+
+function renderAnalytics(){
+  const ts=sortedTrades();
+  const s=calculate(ts);
+
+  setMoney("grossWins",s.grossWins);
+  setMoney("grossLosses",-s.grossLosses);
+
+  $("rrRatio").textContent=s.avgR===null?"—":s.avgR.toFixed(2)+"R";
+  $("aWins").textContent=s.wins;
+  $("aLosses").textContent=s.losses;
+  $("aFlats").textContent=s.flats;
+  $("aPlan").textContent=s.planRate===null?"—":s.planRate.toFixed(1)+"%";
+  $("aWinStreak").textContent=s.maxWin;
+  $("aLossStreak").textContent=s.maxLoss;
+  $("aStart").textContent=money(startingCapital);
+  $("aCapital").textContent=money(startingCapital+trades.reduce((a,t)=>a+num(t.result),0));
+
+  const dirs=["Buy","Sell"];
+  const dv=dirs.map(d=>ts.filter(t=>t.direction===d).reduce((a,t)=>a+num(t.result),0));
+
+  chartEmpty("directionChart","directionEmpty",ts.length>0);
+  if(ts.length)makeBar("direction","directionChart",dirs,dv);
+  else destroyChart("direction");
+
+  const strats=[...new Set(ts.map(t=>t.strategy||"Non renseignée"))];
+  const sv=strats.map(st=>ts.filter(t=>(t.strategy||"Non renseignée")===st).reduce((a,t)=>a+num(t.result),0));
+
+  chartEmpty("strategyChart","strategyEmpty",ts.length>0);
+  if(ts.length)makeBar("strategy","strategyChart",strats,sv);
+  else destroyChart("strategy");
+
+  const map=allConfirmations(ts);
+  const keys=Object.keys(map).sort();
+  const net=keys.map(k=>map[k].reduce((a,t)=>a+num(t.result),0));
+  const wr=keys.map(k=>map[k].length?map[k].filter(t=>num(t.result)>0).length/map[k].length*100:0);
+
+  chartEmpty("confirmationChart","confirmationEmpty",keys.length>0);
+  if(keys.length)makeBar("confirmation","confirmationChart",keys,net);
+  else destroyChart("confirmation");
+
+  chartEmpty("confirmationWinChart","confirmationWinEmpty",keys.length>0);
+
+  if(keys.length){
+    destroyChart("confirmationWin");
+    const c=chartColors();
+
+    charts.confirmationWin=new Chart($("confirmationWinChart"),{
+      type:"bar",
+      data:{
+        labels:keys,
+        datasets:[{
+          data:wr,
+          backgroundColor:c.accent,
+          borderRadius:4
+        }]
+      },
+      options:{
+        ...axisOptions(),
+        plugins:{legend:{display:false}},
+        scales:{
+          ...axisOptions().scales,
+          y:{
+            ...axisOptions().scales.y,
+            min:0,
+            max:100,
+            ticks:{
+              color:c.text,
+              callback:v=>v+"%"
+            }
+          }
+        }
+      }
+    });
+  }else{
+    destroyChart("confirmationWin");
+  }
+
+  renderInsights(ts,"analyticsInsights");
+}
+
+function renderReview(){
+  const now=today();
+  const month=trades.filter(t=>t.date&&t.date.slice(0,7)===now.slice(0,7));
+  const d=new Date(now+"T12:00:00");
+
+  d.setDate(d.getDate()-((d.getDay()+6)%7));
+
+  const start=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  const week=trades.filter(t=>t.date>=start&&t.date<=now);
+
+  setMoney("weekResult",calculate(week).net);
+  setMoney("monthResult",calculate(month).net);
+
+  $("weekCount").textContent=week.length+" position(s) cette semaine";
+  $("monthCount").textContent=month.length+" position(s) ce mois-ci";
+  $("reviewCount").textContent=trades.length;
+
+  $("reviewGood").value=review.good;
+  $("reviewImprove").value=review.improve;
+  $("reviewGoals").value=review.goals;
+}
+
+$("reviewForm").addEventListener("submit",e=>{
+  e.preventDefault();
+  review={
+    good:$("reviewGood").value,
+    improve:$("reviewImprove").value,
+    goals:$("reviewGoals").value
+  };
+  saveSettings();
+  notify("Bilan personnel enregistré.");
+});
+
+$("capitalForm").addEventListener("submit",e=>{
+  e.preventDefault();
+  startingCapital=Math.max(0,num($("startingCapital").value));
+  saveSettings();
+  renderAll();
+  notify("Capital initial enregistré.");
+});
+
+function downloadFile(name,content,type){
+  const blob=new Blob([content],{type});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download=name;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+$("backupBtn").addEventListener("click",async()=>{
+  try{
+    const payload={
+      version:2,
+      exportedAt:new Date().toISOString(),
+      startingCapital,
+      review,
+      theme:document.documentElement.dataset.theme,
+      trades
+    };
+
+    downloadFile(
+      "journal-trading-carolus-sauvegarde.json",
+      JSON.stringify(payload),
+      "application/json"
+    );
+
+    notify("Sauvegarde créée.");
+  }catch(e){
+    alert("Impossible de créer la sauvegarde.");
+  }
+});
+
+function csvEscape(v){
+  const s=String(v??"");
+  return /[",;\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+}
+
+$("exportCsv").addEventListener("click",()=>{
+  const keys=[
+    "date","entryTime","direction","timeframe","strategy","context","quality",
+    "result","risk","target","rrTarget","rrReal","setup","entryZone","plan",
+    "emotion","mistake","analysis","confirmationNotes","lesson",
+    "candles","patterns","smc"
+  ];
+
+  const rows=[
+    keys,
+    ...sortedTrades().map(t=>keys.map(k=>
+      ["candles","patterns","smc"].includes(k)
+        ?(t.confirmations?.[k]||[]).join(", ")
+        :k==="rrTarget"
+          ?(rrTarget(t)??"")
+          :k==="rrReal"
+            ?(rrReal(t)??"")
+            :(t[k]??"")
+    ))
+  ];
+
+  downloadFile(
+    "journal-trading-carolus.csv",
+    "\ufeff"+rows.map(r=>r.map(csvEscape).join(";")).join("\n"),
+    "text/csv;charset=utf-8"
+  );
+});
+
+$("restoreFile").addEventListener("change",async e=>{
+  const file=e.target.files[0];
+  if(!file)return;
+
+  try{
+    const d=JSON.parse(await file.text());
+    if(!Array.isArray(d.trades))throw new Error("Invalid backup");
+
+    if(!confirm("Cette importation remplacera les données actuelles. Continuer ?"))return;
+
+    await dbClear();
+
+    for(const t of d.trades){
+      if(!t.id)t.id="trade-"+Date.now()+"-"+Math.random().toString(36).slice(2);
+      await dbPut(t);
+    }
+
+    startingCapital=num(d.startingCapital);
+    review={good:"",improve:"",goals:"",...(d.review||{})};
+    applyTheme(d.theme||"dark");
+    saveSettings();
+
+    await refreshTrades();
+    renderAll();
+    notify("Sauvegarde restaurée.");
+  }catch(err){
+    console.error(err);
+    alert("Fichier JSON invalide ou restauration impossible.");
+  }finally{
+    e.target.value="";
+  }
+});
+
+$("clearAll").addEventListener("click",async()=>{
+  if(!confirm("Supprimer toutes les positions et toutes les captures de ce navigateur ?"))return;
+  if(!confirm("Dernière confirmation : cette opération est irréversible sans sauvegarde."))return;
+
+  try{
+    await dbClear();
+    trades=[];
+    startingCapital=0;
+    review={good:"",improve:"",goals:""};
+    saveSettings();
+    renderAll();
+    notify("Données effacées.");
+  }catch(e){
+    alert("Impossible d'effacer les données.");
+  }
+});
+
+async function refreshTrades(){
+  trades=await dbGetAll();
+  trades.sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+}
+
+function renderAll(){
+  renderDashboard();
+  renderHistory();
+  renderAnalytics();
+  renderReview();
+  $("startingCapital").value=startingCapital||"";
+  updateStorageInfo();
+}
+
+async function updateStorageInfo(){
+  try{
+    let estimate="";
+
+    if(navigator.storage?.estimate){
+      const e=await navigator.storage.estimate();
+      estimate=" Utilisation estimée : "+((e.usage||0)/1024/1024).toFixed(1)+" Mo";
+    }
+
+    const n=trades.reduce((a,t)=>a+(t.captures?.length||0),0);
+
+    $("storageInfo").textContent=
+      trades.length+" position(s), "+n+" capture(s) enregistrée(s) dans ce navigateur."+estimate;
+  }catch(e){
+    $("storageInfo").textContent=trades.length+" position(s) enregistrée(s).";
+  }
+}
+
+async function init(){
+  readSettings();
+  $("tradeDate").value=today();
+
+  try{
+    await openDB();
+    await refreshTrades();
+    renderAll();
+  }catch(e){
+    console.error(e);
+    alert("Le navigateur ne permet pas d'ouvrir IndexedDB. Essaie avec une version récente de Chrome, Firefox, Safari ou Edge.");
+  }
+}
+
+init();
+</script>
+</body>
+</html>
