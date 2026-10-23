@@ -3,16 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#f6f1e7">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%230f6b4f%27/%3E%3Cpath d=%27M7 21l6-7 4 4 8-10%27 fill=%27none%27 stroke=%27%23f6f1e7%27 stroke-width=%273%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E">
+<meta name="theme-color" content="#ecf6f4">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%2312a065%27/%3E%3Cpath d=%27M7 21l6-7 4 4 8-10%27 fill=%27none%27 stroke=%27%23ffffff%27 stroke-width=%273%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E">
 <title>Journal de trading | Carolus TOGONOU</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
-:root{color-scheme:light;--bg:#f6f1e7;--sidebar:#fffdf8;--panel:#fffdf8;--panel2:#f0e9d9;--input:#fffdf8;--border:#e2d9c6;--border2:#c9bda3;--text:#1d2922;--muted:#6c786d;--accent:#0f6b4f;--accentText:#fffdf8;--green:#18895a;--red:#c4412f;--yellow:#b7791f;--shadow:none}
-:root[data-theme="dark"]{color-scheme:dark;--bg:#0e1511;--sidebar:#131c17;--panel:#16201b;--panel2:#1d2a23;--input:#111a15;--border:#27362d;--border2:#37493d;--text:#ebf2ea;--muted:#8fa196;--accent:#5fd3a0;--accentText:#06241a;--green:#5fd3a0;--red:#ff8a72;--yellow:#f0c36a;--shadow:none}
+:root{color-scheme:light;--bg:#ecf6f4;--sidebar:#ffffff;--panel:#ffffff;--panel2:#e0f0ed;--input:#ffffff;--border:#cfe5e1;--border2:#a9cfc9;--text:#0c2f33;--muted:#58797a;--accent:#1b7fd1;--accentText:#ffffff;--green:#12a065;--red:#f08a24;--yellow:#f08a24;--onGreen:#ffffff;--onRed:#2a1300;--shadow:none}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#071f1e;--sidebar:#0b2a28;--panel:#0e2e2c;--panel2:#143a37;--input:#0a2523;--border:#1f4a46;--border2:#2d6660;--text:#e6f5f2;--muted:#8bb5ae;--accent:#4aa8ff;--accentText:#04182b;--green:#3fe0a0;--red:#ffa03f;--yellow:#ffa03f;--onGreen:#04231a;--onRed:#2a1300;--shadow:none}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;transition:background .2s,color .2s}
 ::selection{background:color-mix(in srgb,var(--accent) 35%,transparent)}
@@ -199,6 +199,35 @@ header h1{font-size:24px}
 nav{display:flex;gap:4px;margin-left:8px}
 main{padding-top:6px}
 }
+
+.card{border-top-color:var(--accent)}
+.cards>.card:nth-child(3n+2){border-top-color:var(--green)}
+.cards>.card:nth-child(3n){border-top-color:var(--red)}
+.brand b{background:var(--red);color:#fff}
+header{border-bottom-color:var(--accent)}
+.btn.primary{background:var(--green);border-color:var(--green);color:var(--onGreen)}
+.choice input{accent-color:var(--green)}
+.choice:has(input:checked){border-color:var(--green);background:color-mix(in srgb,var(--green) 14%,var(--panel))}
+nav button:hover{color:var(--accent)}
+.eyebrow{color:var(--red)}
+.insight{border-left-color:var(--accent)}
+.insight.good{border-left-color:var(--green)}
+.insight.warning{border-left-color:var(--red)}
+.market{color:var(--green)}
+.badge.flat{color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
+
+nav button.active{background:var(--green);color:var(--onGreen)}
+nav button:hover{color:var(--green)}
+.btn.primary{background:var(--red);border-color:var(--red);color:var(--onRed)}
+.card{border-top-color:var(--green)}
+.cards>.card:nth-child(3n+2){border-top-color:var(--accent)}
+.cards>.card:nth-child(3n){border-top-color:var(--red)}
+.brand b{background:var(--green);color:var(--onGreen)}
+header{border-bottom-color:var(--green)}
+.eyebrow{color:var(--accent)}
+.choice input{accent-color:var(--accent)}
+.choice:has(input:checked){border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--panel))}
+.insight{border-left-color:var(--accent)}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -364,13 +393,7 @@ main{padding-top:6px}
             <option value="Sell">Sell</option>
           </select>
         </label>
-        <label>Unité de temps
-          <select id="timeframe">
-            <option value="">Non renseignée</option>
-            <option>H1</option><option>M30</option><option>M15</option>
-            <option>M5</option><option>M1</option><option>Autre</option>
-          </select>
-        </label>
+        <div class="full"><div class="choice-heading" style="margin-top:0">Unités de temps <span class="muted">(plusieurs choix possibles)</span></div><div class="choice-grid"><label class="choice"><input type="checkbox" name="tf" value="D1">D1</label><label class="choice"><input type="checkbox" name="tf" value="H4">H4</label><label class="choice"><input type="checkbox" name="tf" value="H1">H1</label><label class="choice"><input type="checkbox" name="tf" value="M30">M30</label><label class="choice"><input type="checkbox" name="tf" value="M15">M15</label><label class="choice"><input type="checkbox" name="tf" value="M5">M5</label><label class="choice"><input type="checkbox" name="tf" value="M1">M1</label></div></div>
         <label>Stratégie
           <select id="strategy">
             <option value="">Non renseignée</option>
@@ -399,8 +422,8 @@ main{padding-top:6px}
       <h3>02. Résultat et gestion du risque</h3>
       <p>Renseigne ton risque initial et le gain visé. Le R:R sera calculé automatiquement.</p>
       <div class="form-grid">
-        <label>Montant gagné ou perdu ($) *
-          <input type="number" id="result" step="0.01" required placeholder="Ex. : 12.50 ou -5.00">
+        <label>Montant gagné ou perdu ($) <span class="muted">(optionnel : à renseigner à la clôture)</span>
+          <input type="number" id="result" step="0.01" placeholder="Laisse vide tant que la position est ouverte">
         </label>
         <label>Risque prévu ($) *
           <input type="number" id="risk" min="0.01" step="0.01" required placeholder="Ex. : 5.00">
@@ -559,7 +582,7 @@ main{padding-top:6px}
     <label>Du<input type="date" id="dateFrom"></label>
     <label>Au<input type="date" id="dateTo"></label>
     <label>Direction<select id="directionFilter"><option value="">Toutes</option><option>Buy</option><option>Sell</option></select></label>
-    <label>Résultat<select id="outcomeFilter"><option value="">Tous</option><option value="win">Gagnant</option><option value="loss">Perdant</option><option value="flat">Neutre</option></select></label>
+    <label>Résultat<select id="outcomeFilter"><option value="">Tous</option><option value="win">Gagnant</option><option value="loss">Perdant</option><option value="flat">Neutre</option><option value="open">Ouverte</option></select></label>
     <label>Stratégie<select id="strategyFilter"><option value="">Toutes</option><option>SMC</option><option>Price Action</option><option>SMC + Price Action</option><option>Autre</option></select></label>
     <label>Confirmation
       <select id="confirmationFilter">
@@ -701,6 +724,7 @@ const SETTINGS_KEY="carolus_trading_settings_v2";
 const $=id=>document.getElementById(id);
 let db=null;
 let trades=[];
+let allTrades=[];
 let startingCapital=0;
 let review={good:"",improve:"",goals:""};
 let currentCaptures=[];
@@ -710,7 +734,6 @@ const fieldIds={
   date:"tradeDate",
   entryTime:"entryTime",
   direction:"direction",
-  timeframe:"timeframe",
   strategy:"strategy",
   context:"context",
   quality:"quality",
@@ -740,9 +763,10 @@ const today=()=>{
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({
   "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
 }[c]));
-const outcome=t=>num(t.result)>0?"win":num(t.result)<0?"loss":"flat";
+const isOpen=t=>t.result===null||t.result===undefined||t.result==="";
+const outcome=t=>isOpen(t)?"open":num(t.result)>0?"win":num(t.result)<0?"loss":"flat";
 const rrTarget=t=>num(t.risk)>0&&num(t.target)>0?num(t.target)/num(t.risk):null;
-const rrReal=t=>num(t.risk)>0?num(t.result)/num(t.risk):null;
+const rrReal=t=>!isOpen(t)&&num(t.risk)>0?num(t.result)/num(t.risk):null;
 function notify(msg){
   $("toast").textContent=msg;
   $("toast").classList.add("show");
@@ -867,8 +891,8 @@ $("themeToggle").addEventListener("click",()=>{
   saveSettings();
 });
 $("year").textContent=new Date().getFullYear();
-function sortedTrades(){
-  return [...trades].sort((a,b)=>
+function sortedTrades(src){
+  return [...(src||trades)].sort((a,b)=>
     (a.date||"").localeCompare(b.date||"")||
     (a.entryTime||"").localeCompare(b.entryTime||"")||
     (a.createdAt||0)-(b.createdAt||0)
@@ -1219,7 +1243,9 @@ function selectedConfirmations(){
 function getFormData(){
   const t={};
   Object.entries(fieldIds).forEach(([k,id])=>t[k]=$(id).value.trim());
-  t.result=num(t.result);
+  t.result=t.result===""?null:num(t.result);
+  t.timeframes=selectedValues("tf");
+  t.timeframe=t.timeframes.join(" + ");
   t.risk=num(t.risk);
   t.target=num(t.target);
   t.market="Step Index";
@@ -1325,7 +1351,7 @@ $("tradeForm").addEventListener("submit",async e=>{
   try{
     const data=getFormData();
     const id=$("tradeId").value||("trade-"+Date.now()+"-"+Math.random().toString(36).slice(2,8));
-    const old=trades.find(t=>t.id===id);
+    const old=allTrades.find(t=>t.id===id);
     const captures=await collectCaptures();
     const record={
       ...old,
@@ -1349,10 +1375,11 @@ $("tradeForm").addEventListener("submit",async e=>{
   }
 });
 function editTrade(id){
-  const t=trades.find(x=>x.id===id);
+  const t=allTrades.find(x=>x.id===id);
   if(!t)return;
   resetForm();
   Object.entries(fieldIds).forEach(([k,field])=>$(field).value=t[k]??"");
+  setSelected("tf",t.timeframes||(t.timeframe?String(t.timeframe).split(" + "):[]));
   $("tradeId").value=id;
   $("formTitle").textContent="Modifier une position";
   $("saveButton").textContent="Enregistrer les modifications";
@@ -1388,7 +1415,7 @@ function editTrade(id){
   showPage("new");
 }
 async function deleteTrade(id){
-  const t=trades.find(x=>x.id===id);
+  const t=allTrades.find(x=>x.id===id);
   if(!t||!confirm("Supprimer cette position et ses captures ?"))return;
   try{
     await dbDelete(id);
@@ -1403,7 +1430,7 @@ function confirmationSummary(t){
   return (t.confirmations?.all||[]).join(", ")||"—";
 }
 function showDetails(id){
-  const t=trades.find(x=>x.id===id);
+  const t=allTrades.find(x=>x.id===id);
   if(!t)return;
   const items=[
     ["Date",t.date],
@@ -1411,7 +1438,7 @@ function showDetails(id){
     ["Direction",t.direction],
     ["Stratégie",t.strategy||"—"],
     ["Unité de temps",t.timeframe||"—"],
-    ["Résultat",money(t.result)],
+    ["Résultat",isOpen(t)?"Position ouverte":money(t.result)],
     ["Risque",money(t.risk)],
     ["Gain visé",money(t.target)],
     ["R:R visé",rrTarget(t)===null?"—":"1:"+Number(rrTarget(t)).toFixed(2)],
@@ -1454,7 +1481,7 @@ function filteredTrades(){
   const out=$("outcomeFilter").value;
   const strategy=$("strategyFilter").value;
   const conf=$("confirmationFilter").value;
-  return sortedTrades().filter(t=>
+  return sortedTrades(allTrades).filter(t=>
     (!q||[t.analysis,t.lesson,t.strategy,t.confirmationNotes,t.setup,t.emotion,t.direction,confirmationSummary(t)].join(" ").toLowerCase().includes(q))&&
     (!from||t.date>=from)&&
     (!to||t.date<=to)&&
@@ -1481,7 +1508,7 @@ function renderHistory(){
       <td title="${esc(confirmationSummary(t))}">${esc(confirmationSummary(t).length>38?confirmationSummary(t).slice(0,35)+"…":confirmationSummary(t))}</td>
       <td>${rr===null?"—":"1:"+rr.toFixed(2)}</td>
       <td class="${real>0?"green":real<0?"red":""}">${real===null?"—":real.toFixed(2)+"R"}</td>
-      <td class="${r>0?"green":r<0?"red":""}">${money(r)}</td>
+      <td class="${r>0?"green":r<0?"red":""}">${isOpen(t)?'<span class="badge flat">Ouverte</span>':money(r)}</td>
       <td>${caps}</td>
       <td><div class="action-buttons">
         <button class="small-btn" data-view="${esc(t.id)}">Voir</button>
@@ -1598,7 +1625,7 @@ function renderReview(){
   setMoney("monthResult",calculate(month).net);
   $("weekCount").textContent=week.length+" position(s) cette semaine";
   $("monthCount").textContent=month.length+" position(s) ce mois-ci";
-  $("reviewCount").textContent=trades.length;
+  $("reviewCount").textContent=allTrades.length;
   $("reviewGood").value=review.good;
   $("reviewImprove").value=review.improve;
   $("reviewGoals").value=review.goals;
@@ -1637,7 +1664,7 @@ $("backupBtn").addEventListener("click",async()=>{
       startingCapital,
       review,
       theme:document.documentElement.dataset.theme,
-      trades
+      trades:allTrades
     };
     downloadFile(
       "journal-trading-carolus-sauvegarde.json",
@@ -1662,7 +1689,7 @@ $("exportCsv").addEventListener("click",()=>{
   ];
   const rows=[
     keys,
-    ...sortedTrades().map(t=>keys.map(k=>
+    ...sortedTrades(allTrades).map(t=>keys.map(k=>
       ["candles","patterns","smc"].includes(k)
         ?(t.confirmations?.[k]||[]).join(", ")
         :k==="rrTarget"
@@ -1710,6 +1737,7 @@ $("clearAll").addEventListener("click",async()=>{
   try{
     await dbClear();
     trades=[];
+    allTrades=[];
     startingCapital=0;
     review={good:"",improve:"",goals:""};
     saveSettings();
@@ -1720,8 +1748,9 @@ $("clearAll").addEventListener("click",async()=>{
   }
 });
 async function refreshTrades(){
-  trades=await dbGetAll();
-  trades.sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+  allTrades=await dbGetAll();
+  allTrades.sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+  trades=allTrades.filter(t=>!isOpen(t));
 }
 function renderAll(){
   renderDashboard();
@@ -1761,12 +1790,13 @@ async function init(){
 }
 const LAST_KEY="carolus_last_entry";
 function saveLast(r){
-  try{localStorage.setItem(LAST_KEY,JSON.stringify({timeframe:r.timeframe,strategy:r.strategy,risk:r.risk}));}catch(e){}
+  try{localStorage.setItem(LAST_KEY,JSON.stringify({timeframes:r.timeframes,strategy:r.strategy,risk:r.risk}));}catch(e){}
 }
 function applyLast(){
   try{
     const L=JSON.parse(localStorage.getItem(LAST_KEY)||"{}");
-    ["timeframe","strategy","risk"].forEach(k=>{if(L[k])$(fieldIds[k]).value=L[k];});
+    ["strategy","risk"].forEach(k=>{if(L[k])$(fieldIds[k]).value=L[k];});
+    if(L.timeframes)setSelected("tf",L.timeframes);
   }catch(e){}
 }
 document.addEventListener("keydown",e=>{
